@@ -10,7 +10,7 @@ permissions:
 jobs:
   check:
     name: Lint, test, build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -25,13 +25,14 @@ jobs:
   deploy:
     name: Deploy to Vercel
     needs: check
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     concurrency:
       group: production
       cancel-in-progress: false
     env:
       VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
       VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+      SITE_URL: https://vite-vercel-cicd.vercel.app
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -40,5 +41,20 @@ jobs:
           cache: npm
       - run: npm install --global vercel@62.1.0
       - run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
+      - name: Stamp build with commit SHA
+        run: echo "$GITHUB_SHA" > public/version.txt
       - run: vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
       - run: vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }}
+      - name: Smoke test
+        run: |
+          html=$(curl -fsS --retry 5 --retry-all-errors "$SITE_URL/")
+          grep -q "<title>Репетиторы" <<< "$html"
+          for i in 1 2 3 4 5 6; do
+            if [ "$(curl -fsS "$SITE_URL/version.txt")" = "$GITHUB_SHA" ]; then
+              echo "OK: $GITHUB_SHA is live on $SITE_URL"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "Live version does not match $GITHUB_SHA"
+          exit 1
