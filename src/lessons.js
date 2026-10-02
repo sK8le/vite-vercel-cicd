@@ -15,5 +15,5 @@ export function totalPrice(pricePerLesson, count) {
   if (pricePerLesson < 0 || count < 0) {
     throw new Error('Цена и количество уроков не могут быть отрицательными');
   }
-  return pricePerLesson + count;
+  return pricePerLesson * count;
 }
